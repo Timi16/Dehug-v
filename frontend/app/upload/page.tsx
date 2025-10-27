@@ -42,7 +42,7 @@ import JSZip from "jszip";
 import { toast } from "react-toastify";
 import useIPFS from "@/hooks/useIPFS";
 import useUploadContent from "../../hooks/DeHug/useUploadContent";
-import { useActiveAccount } from "thirdweb/react";
+import { useAccount } from "@/lib/thirdweb-hooks";
 
 // Static NFT image
 const STATIC_NFT_IMAGE =
@@ -321,7 +321,7 @@ export default function UploadPage() {
   // Hooks
   const { uploadToIPFS, getIPFSHash } = useIPFS();
   const uploadContent = useUploadContent();
-  const account = useActiveAccount();
+  const { address, isConnected } = useAccount();
 
   const validateFiles = (
     newFiles: File[]
@@ -705,8 +705,8 @@ export default function UploadPage() {
     }
 
     // Check wallet connection
-    const userAddress = account?.address;
-    if (!userAddress) {
+    const userAddress = address;
+    if (!isConnected || !userAddress) {
       toast.error("Please connect your wallet to continue", {
         position: "top-right",
         autoClose: 5000,

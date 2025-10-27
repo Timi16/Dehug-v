@@ -2,12 +2,11 @@
 
 import { useCallback } from "react";
 import { toast } from 'react-toastify';
-import { useActiveAccount } from "thirdweb/react";
 import { useChainSwitch } from "../useChainSwitch";
-import { getContract, prepareContractCall, sendTransaction, waitForReceipt, readContract } from "thirdweb";
-import { thirdwebClient } from "@/app/client";
+import { useAccount } from "@/lib/thirdweb-hooks";
+import { usePushChainClient } from '@pushchain/ui-kit';
 import { pushChainDonut  } from "@/constants/chain";
-import { ethers } from 'ethers'; // Add: npm i ethers for TransferSingle decode
+import { ethers } from 'ethers';
 
 type ErrorWithReason = {
   reason?: string;
@@ -31,15 +30,21 @@ interface UploadContentResult {
 }
 
 const useUploadContent = () => {
-  const account = useActiveAccount();
+  const { address, isConnected } = useAccount();
   const { ensureCorrectChain } = useChainSwitch();
+  const { pushChainClient } = usePushChainClient();
 
   // BaseScan URL helper
-  const getExplorerUrl = (txHash: `0x${string}`) => 
-    `https://sepolia.basescan.org/tx/${txHash}`;
+  const getExplorerUrl = (txHash: `0x${string}`) => {
+    try {
+      const url = (pushChainClient as any)?.explorer?.getTransactionUrl?.(txHash);
+      if (typeof url === 'string' && url.length > 0) return url;
+    } catch {}
+    return `https://donut.push.network/tx/${txHash}`;
+  };
 
   return useCallback(async (params: UploadContentParams): Promise<UploadContentResult> => {
-    if (!account) {
+    if (!isConnected || !address) {
       toast.warning("Please connect your wallet first.");
       return { success: false };
     }
@@ -69,32 +74,32 @@ const useUploadContent = () => {
     const loadingToast = toast.loading("Uploading content... Please confirm in wallet.");
 
     try {
-      // Get contract
-      const contract = getContract({
-        client: thirdwebClient,
-        chain: pushChainDonut ,
-        address: contractAddress,
-      });
+      // Encode contract call data with ethers
+      const iface = new ethers.Interface([
+        "function uploadContent(uint8 _contentType, string _ipfsHash, string _metadataIPFSHash, string _imageIPFSHash, string _title, string[] _tags) returns (uint256)",
+        "function getLatestTokenId() view returns (uint256)",
+        "function totalSupply() view returns (uint256)",
+      ]);
+      const data = iface.encodeFunctionData("uploadContent", [
+        params.contentType,
+        params.ipfsHash,
+        params.metadataIPFSHash,
+        params.imageIPFSHash,
+        params.title,
+        params.tags,
+      ]);
 
-      // Prepare tx
-      const transaction = prepareContractCall({
-        contract,
-        method: "function uploadContent(uint8 _contentType, string _ipfsHash, string _metadataIPFSHash, string _imageIPFSHash, string _title, string[] _tags) returns (uint256)",
-        params: [
-          params.contentType,
-          params.ipfsHash,
-          params.metadataIPFSHash,
-          params.imageIPFSHash,
-          params.title,
-          params.tags,
-        ],
-      });
+      // Send transaction via Push Chain client
+      if (!pushChainClient) {
+        throw new Error("Push Chain client not initialized");
+      }
 
-      // Send tx
-      const result = await sendTransaction({
-        transaction,
-        account,
+      const sendRes = await (pushChainClient as any).universal.sendTransaction({
+        to: contractAddress,
+        data,
       });
+      const txHash = sendRes?.hash as `0x${string}`;
+      if (!txHash) throw new Error("No transaction hash returned");
 
       toast.update(loadingToast, { 
         render: "Transaction sent! Waiting for confirmation...", 
@@ -102,12 +107,9 @@ const useUploadContent = () => {
         isLoading: true 
       });
 
-      // Wait for receipt
-      const receipt = await waitForReceipt({
-        client: thirdwebClient,
-        chain: pushChainDonut ,
-        transactionHash: result.transactionHash,
-      });
+      // Wait for receipt via RPC
+      const provider = new ethers.JsonRpcProvider((pushChainDonut as any).rpc as string);
+      const receipt = await provider.waitForTransaction(txHash);
 
       toast.update(loadingToast, { 
         render: "Transaction confirmed! Fetching token ID...", 
@@ -162,30 +164,34 @@ const useUploadContent = () => {
         }
       }
 
-      // Method 3: getLatestTokenId (your original)
+      // Method 3: getLatestTokenId (read via provider)
       if (!tokenId) {
         try {
-          const latestId = await readContract({
-            contract,
-            method: "function getLatestTokenId() view returns (uint256)",
-            params: [],
-          });
-          tokenId = latestId.toString();
+          const readProvider = provider;
+          const readIface = new ethers.Interface([
+            "function getLatestTokenId() view returns (uint256)",
+          ]);
+          const callData = readIface.encodeFunctionData("getLatestTokenId", []);
+          const raw = await readProvider.call({ to: contractAddress, data: callData });
+          const [latestId] = readIface.decodeFunctionResult("getLatestTokenId", raw);
+          tokenId = (latestId as bigint).toString();
           console.log("Token ID from getLatestTokenId:", tokenId);
         } catch (readError) {
           console.warn("Failed to read getLatestTokenId:", readError);
         }
       }
 
-      // Method 4: totalSupply fallback (your original, assume latest = supply)
+      // Method 4: totalSupply fallback (assume latest = supply)
       if (!tokenId) {
         try {
-          const supply = await readContract({
-            contract,
-            method: "function totalSupply() view returns (uint256)",
-            params: [],
-          });
-          tokenId = supply.toString(); // Sequential IDs
+          const readProvider = provider;
+          const readIface = new ethers.Interface([
+            "function totalSupply() view returns (uint256)",
+          ]);
+          const callData = readIface.encodeFunctionData("totalSupply", []);
+          const raw = await readProvider.call({ to: contractAddress, data: callData });
+          const [supply] = readIface.decodeFunctionResult("totalSupply", raw);
+          tokenId = (supply as bigint).toString(); // Sequential IDs
           console.log("Token ID from totalSupply:", tokenId);
         } catch (supplyError) {
           console.error("Failed to read totalSupply:", supplyError);
@@ -195,7 +201,7 @@ const useUploadContent = () => {
       // Final fallback
       if (!tokenId || tokenId === "0") {
         console.warn("Could not fetch token ID automatically.");
-        const explorerUrl = getExplorerUrl(result.transactionHash);
+        const explorerUrl = getExplorerUrl(txHash);
         toast.update(loadingToast, { 
           render: `NFT minted! View on BaseScan: ${explorerUrl}`, 
           type: "warning", 
@@ -205,7 +211,7 @@ const useUploadContent = () => {
         
         return {
           success: true,
-          transactionHash: result.transactionHash,
+          transactionHash: txHash,
           tokenId: "Check BaseScan",
           explorerUrl,
         };
@@ -220,7 +226,7 @@ const useUploadContent = () => {
 
       return {
         success: true,
-        transactionHash: result.transactionHash,
+        transactionHash: txHash,
         tokenId,
       };
     } catch (error) {

@@ -2,70 +2,51 @@
 
 import { useCallback } from "react";
 import { toast } from 'react-toastify'
-import { useSwitchActiveWalletChain } from "thirdweb/react";
-import { useActiveWallet, useActiveWalletChain } from "thirdweb/react";
-import { pushChainDonut , SUPPORTED_CHAIN_ID } from "@/constants/chain";
+import { useAccount } from "@/lib/thirdweb-hooks";
 
 export const useChainSwitch = () => {
-  const wallet = useActiveWallet();
-  const activeChain = useActiveWalletChain();
-  const switchChain = useSwitchActiveWalletChain();
+  const { isConnected } = useAccount();
 
-  const isOnCorrectChain = activeChain?.id === SUPPORTED_CHAIN_ID;
+  const isOnCorrectChain = undefined as unknown as boolean; // Unknown from UI Kit, assume user-managed
 
   const switchToLiskSepolia = useCallback(async () => {
-    if (!wallet) {
+    if (!isConnected) {
       toast.error("No wallet connected");
       return false;
     }
 
-    if (isOnCorrectChain) {
-      return true;
-    }
-
     try {
-      await switchChain(pushChainDonut );
-      toast.success("Successfully switched to Lisk Sepolia");
+      toast.info("Please switch your wallet to Push Chain Donut Testnet (chain id 42101) and retry.");
       return true;
     } catch (error) {
       console.error("Failed to switch chain:", error);
       
       // Handle different error types
       if (error instanceof Error) {
-        if (error.message.includes("rejected")) {
-          toast.info("Chain switch cancelled by user");
-        } else if (error.message.includes("Unrecognized chain")) {
-          toast.error("Please add Lisk Sepolia network to your wallet manually");
-        } else {
-          toast.error(`Failed to switch network: ${error.message}`);
-        }
+        toast.error(`Failed to switch network: ${error.message}`);
       } else {
-        toast.error("Failed to switch to Lisk Sepolia network");
+        toast.error("Failed to switch network");
       }
       
       return false;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wallet, isOnCorrectChain]);
+  }, [isConnected]);
 
   const ensureCorrectChain = useCallback(async () => {
-    if (!wallet) {
+    if (!isConnected) {
       toast.warning("Please connect your wallet first");
       return false;
     }
 
-    if (!isOnCorrectChain) {
-      toast.warning("Please switch to Lisk Sepolia network");
-      return await switchToLiskSepolia();
-    }
-
-    return true;
-  }, [wallet, isOnCorrectChain, switchToLiskSepolia]);
+    // Until UI Kit exposes network id, prompt user and proceed.
+    return await switchToLiskSepolia();
+  }, [isConnected, switchToLiskSepolia]);
 
   return {
     isOnCorrectChain,
     switchToLiskSepolia,
     ensureCorrectChain,
-    currentChainId: activeChain?.id,
+    currentChainId: undefined,
   };
 };

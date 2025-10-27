@@ -1,10 +1,7 @@
 "use client";
 
-import { thirdwebClient, wallets } from "../app/client";
 import { useEffect, useState } from "react";
-import { ConnectButton, darkTheme, useActiveAccount } from "thirdweb/react";
-import type { Account } from "thirdweb/wallets";
-import { pushChainDonut } from "../constants/chain";
+import { PushUniversalAccountButton, PushUI, usePushWalletContext } from '@pushchain/ui-kit';
 
 interface ConnectWalletProps {
   onConnect?: () => void;
@@ -13,8 +10,8 @@ interface ConnectWalletProps {
 
 const ConnectWallet = ({ onConnect, label = "Connect Wallet" }: ConnectWalletProps) => {
   const [mounted, setMounted] = useState(false);
-  const account = useActiveAccount();
-  const [prevAccount, setPrevAccount] = useState<Account | undefined>(undefined);
+  const { connectionStatus } = usePushWalletContext();
+  const [wasConnected, setWasConnected] = useState(false);
   const origin =
     typeof window !== "undefined"
       ? window.location.origin
@@ -32,47 +29,19 @@ const ConnectWallet = ({ onConnect, label = "Connect Wallet" }: ConnectWalletPro
   }, []);
 
   useEffect(() => {
-    if (account && !prevAccount && onConnect) {
+    const isConnected = connectionStatus === PushUI.CONSTANTS.CONNECTION.STATUS.CONNECTED;
+    if (isConnected && !wasConnected && onConnect) {
       onConnect();
     }
-    setPrevAccount(account);
-  }, [account, prevAccount, onConnect]);
+    setWasConnected(isConnected);
+  }, [connectionStatus, wasConnected, onConnect]);
 
   if (!mounted) return null;
 
   return (
     <div className="flex items-center gap-3 justify-end self-end">
-      <div className="hidden md:flex">
-        <ConnectButton 
-          client={thirdwebClient}
-          appMetadata={metadata}
-          connectButton={{ label }}
-          wallets={wallets}
-          connectModal={{ size: "compact" }}
-          chain={pushChainDonut}
-          chains={[pushChainDonut]}
-          theme={darkTheme({
-            colors: {
-              primaryButtonBg: "hsl(var(--primary))",
-            },
-          })}
-        />
-      </div>
-      <div className="md:hidden flex">
-        <ConnectButton 
-          client={thirdwebClient}
-          appMetadata={metadata}
-          connectButton={{ label }}
-          wallets={wallets}
-          connectModal={{ size: "compact" }}
-          chain={pushChainDonut}
-          chains={[pushChainDonut]}
-          theme={darkTheme({
-            colors: {
-              primaryButtonBg: "hsl(var(--primary))",
-            },
-          })}
-        />
+      <div className="flex">
+        <PushUniversalAccountButton />
       </div>
     </div>
   );

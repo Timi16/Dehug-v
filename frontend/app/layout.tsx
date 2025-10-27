@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/footer"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
-import { ThirdwebProvider } from "thirdweb/react"
+import PushWalletProvider from "@/components/push-wallet-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -24,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThirdwebProvider>
+        <PushWalletProvider>
           <ThemeProvider
           attribute="class"
           defaultTheme="dark"
@@ -51,7 +51,7 @@ export default function RootLayout({
             progressClassName="bg-orange-500"
           />
         </ThemeProvider>
-        </ThirdwebProvider>
+        </PushWalletProvider>
       </body>
     </html>
   )

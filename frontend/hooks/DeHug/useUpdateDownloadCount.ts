@@ -4,10 +4,9 @@ import { useCallback } from "react";
 import { toast } from 'react-toastify';
 import { useChainId, useAccount } from "../../lib/thirdweb-hooks";
 import { useChainSwitch } from "../useChainSwitch";
-import { useActiveAccount } from "thirdweb/react";
-import { getContract, prepareContractCall, sendTransaction } from "thirdweb";
-import { thirdwebClient } from "@/app/client";
+import { usePushChainClient } from '@pushchain/ui-kit';
 import { pushChainDonut  } from "@/constants/chain";
+import { ethers } from 'ethers';
 
 type ErrorWithReason = {
   reason?: string;
@@ -16,13 +15,13 @@ type ErrorWithReason = {
 
 const useUpdateDownloadCount = () => {
     const chainId = useChainId();
-    const account = useActiveAccount();
-    const { isConnected } = useAccount();
+    const { address, isConnected } = useAccount();
     const { ensureCorrectChain } = useChainSwitch();
+    const { pushChainClient } = usePushChainClient();
 
     return useCallback(
         async (tokenId: number, downloadCount: number) => {
-            if (!account) {
+            if (!isConnected || !address) {
                 toast.warning("Please connect your wallet first.");
                 return false;
             }
@@ -43,32 +42,40 @@ const useUpdateDownloadCount = () => {
             }
 
             try {
-                const contract = getContract({
-                    client: thirdwebClient,
-                    chain: pushChainDonut ,
-                    address: process.env.DEHUG_ADDRESS as string,
-                });
+                const contractAddress = process.env.NEXT_PUBLIC_DEHUG_ADDRESS || process.env.DEHUG_ADDRESS as string;
+                if (!contractAddress) {
+                  toast.error("Contract address not configured. Please add DEHUG_ADDRESS to .env");
+                  return false;
+                }
 
-                const transaction = prepareContractCall({
-                    contract,
-                    method: "function updateDownloadCount(uint256 _tokenId, uint256 _downloadCount)",
-                    params: [BigInt(tokenId), BigInt(downloadCount)],
-                });
+                const iface = new ethers.Interface([
+                  "function updateDownloadCount(uint256 _tokenId, uint256 _downloadCount)"
+                ]);
+                const data = iface.encodeFunctionData("updateDownloadCount", [
+                  BigInt(tokenId),
+                  BigInt(downloadCount)
+                ]);
+
+                if (!pushChainClient) {
+                  throw new Error("Push Chain client not initialized");
+                }
 
                 toast.info("Updating download count...");
-
-                const result = await sendTransaction({
-                    transaction,
-                    account,
+                const sendRes = await (pushChainClient as any).universal.sendTransaction({
+                  to: contractAddress,
+                  data,
                 });
+                const txHash = sendRes?.hash as `0x${string}`;
+                if (!txHash) throw new Error("No transaction hash returned");
+
+                const provider = new ethers.JsonRpcProvider((pushChainDonut as any).rpc as string);
+                await provider.waitForTransaction(txHash);
 
                 toast.success("Download count updated successfully!");
-                
                 return {
-                    success: true,
-                    transactionHash: result.transactionHash,
+                  success: true,
+                  transactionHash: txHash,
                 };
-                
             } catch (error) {
                 const err = error as ErrorWithReason;
                 let errorMessage = "An error occurred while updating download count.";
@@ -86,7 +93,7 @@ const useUpdateDownloadCount = () => {
                 return false;
             }
         },
-        [chainId, isConnected, account, ensureCorrectChain]
+        [chainId, isConnected, address, ensureCorrectChain, pushChainClient]
     );
 };
 
