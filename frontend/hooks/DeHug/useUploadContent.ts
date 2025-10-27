@@ -111,6 +111,11 @@ const useUploadContent = () => {
       const provider = new ethers.JsonRpcProvider((pushChainDonut as any).rpc as string);
       const receipt = await provider.waitForTransaction(txHash);
 
+      // Check if receipt is null
+      if (!receipt) {
+        throw new Error("Transaction receipt not found. The transaction may have failed or timed out.");
+      }
+
       toast.update(loadingToast, { 
         render: "Transaction confirmed! Fetching token ID...", 
         type: "info", 
@@ -258,7 +263,7 @@ const useUploadContent = () => {
 
       return { success: false };
     }
-  }, [account, ensureCorrectChain]); // Optimized deps
+  }, [address, isConnected, ensureCorrectChain, pushChainClient]); // Fixed dependencies
 };
 
 export default useUploadContent;
