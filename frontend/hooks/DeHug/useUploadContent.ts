@@ -6,7 +6,7 @@ import { useActiveAccount } from "thirdweb/react";
 import { useChainSwitch } from "../useChainSwitch";
 import { getContract, prepareContractCall, sendTransaction, waitForReceipt, readContract } from "thirdweb";
 import { thirdwebClient } from "@/app/client";
-import { baseSepolia } from "@/constants/chain";
+import { pushChainDonut  } from "@/constants/chain";
 import { ethers } from 'ethers'; // Add: npm i ethers for TransferSingle decode
 
 type ErrorWithReason = {
@@ -72,7 +72,7 @@ const useUploadContent = () => {
       // Get contract
       const contract = getContract({
         client: thirdwebClient,
-        chain: baseSepolia,
+        chain: pushChainDonut ,
         address: contractAddress,
       });
 
@@ -105,7 +105,7 @@ const useUploadContent = () => {
       // Wait for receipt
       const receipt = await waitForReceipt({
         client: thirdwebClient,
-        chain: baseSepolia,
+        chain: pushChainDonut ,
         transactionHash: result.transactionHash,
       });
 

@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback } from "react";
 import { toast } from 'react-toastify';
 import { useLoading } from "../useLoading";
 import { thirdwebClient } from "@/app/client";
-import { baseSepolia } from "@/constants/chain";
+import { pushChainDonut  } from "@/constants/chain";
 
 const useGetUserContent = (userAddress: string) => {
   const { isConnected } = useAccount();
@@ -23,7 +23,7 @@ const useGetUserContent = (userAddress: string) => {
     try {
       const contract = getContract({
         client: thirdwebClient,
-        chain: baseSepolia,
+        chain: pushChainDonut ,
         address: process.env.DEHUG_ADDRESS as string,
       });
 

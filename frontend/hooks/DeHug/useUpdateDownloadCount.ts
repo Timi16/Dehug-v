@@ -7,7 +7,7 @@ import { useChainSwitch } from "../useChainSwitch";
 import { useActiveAccount } from "thirdweb/react";
 import { getContract, prepareContractCall, sendTransaction } from "thirdweb";
 import { thirdwebClient } from "@/app/client";
-import { baseSepolia } from "@/constants/chain";
+import { pushChainDonut  } from "@/constants/chain";
 
 type ErrorWithReason = {
   reason?: string;
@@ -45,7 +45,7 @@ const useUpdateDownloadCount = () => {
             try {
                 const contract = getContract({
                     client: thirdwebClient,
-                    chain: baseSepolia,
+                    chain: pushChainDonut ,
                     address: process.env.DEHUG_ADDRESS as string,
                 });
 

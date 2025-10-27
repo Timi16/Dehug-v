@@ -4,11 +4,7 @@ import { thirdwebClient, wallets } from "../app/client";
 import { useEffect, useState } from "react";
 import { ConnectButton, darkTheme, useActiveAccount } from "thirdweb/react";
 import type { Account } from "thirdweb/wallets";
-import { useChainSwitch } from "../hooks/useChainSwitch";
 import { pushChainDonut } from "../constants/chain";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ExternalLink } from "lucide-react";
 
 interface ConnectWalletProps {
   onConnect?: () => void;
@@ -19,8 +15,6 @@ const ConnectWallet = ({ onConnect, label = "Connect Wallet" }: ConnectWalletPro
   const [mounted, setMounted] = useState(false);
   const account = useActiveAccount();
   const [prevAccount, setPrevAccount] = useState<Account | undefined>(undefined);
-  const { isOnCorrectChain, switchToPushChain } = useChainSwitch();
-
   const origin =
     typeof window !== "undefined"
       ? window.location.origin
@@ -43,17 +37,6 @@ const ConnectWallet = ({ onConnect, label = "Connect Wallet" }: ConnectWalletPro
     }
     setPrevAccount(account);
   }, [account, prevAccount, onConnect]);
-
-  // Auto-switch to Push Chain when wallet connects
-  useEffect(() => {
-    if (account && !isOnCorrectChain) {
-      const timer = setTimeout(() => {
-        switchToPushChain();
-      }, 1000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [account, isOnCorrectChain, switchToPushChain]);
 
   if (!mounted) return null;
 

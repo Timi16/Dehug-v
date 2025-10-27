@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { toast } from 'react-toastify'
 import { useSwitchActiveWalletChain } from "thirdweb/react";
 import { useActiveWallet, useActiveWalletChain } from "thirdweb/react";
-import { baseSepolia, SUPPORTED_CHAIN_ID } from "@/constants/chain";
+import { pushChainDonut , SUPPORTED_CHAIN_ID } from "@/constants/chain";
 
 export const useChainSwitch = () => {
   const wallet = useActiveWallet();
@@ -24,7 +24,7 @@ export const useChainSwitch = () => {
     }
 
     try {
-      await switchChain(baseSepolia);
+      await switchChain(pushChainDonut );
       toast.success("Successfully switched to Lisk Sepolia");
       return true;
     } catch (error) {

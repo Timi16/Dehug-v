@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback } from "react";
 import { toast } from 'react-toastify';
 import { useLoading } from "../useLoading";
 import { thirdwebClient } from "@/app/client";
-import { baseSepolia } from "@/constants/chain";
+import { pushChainDonut  } from "@/constants/chain";
 
 interface ContentData {
   uploader: string;
@@ -36,7 +36,7 @@ const useGetContent = (tokenId: number) => {
     try {
       const contract = getContract({
         client: thirdwebClient,
-        chain: baseSepolia,
+        chain: pushChainDonut ,
         address: process.env.DEHUG_ADDRESS as string,
       });
 

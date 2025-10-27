@@ -1266,7 +1266,7 @@ export default function UploadPage() {
                     </Label>
                     <Select
                       value={formData.category}
-                      onValueChange={(value) =>
+                      onValueChange={(value: string | boolean) =>
                         handleInputChange("category", value)
                       }
                     >
@@ -1403,7 +1403,7 @@ export default function UploadPage() {
                   </Label>
                   <Select
                     value={formData.license}
-                    onValueChange={(value) =>
+                    onValueChange={(value: string | boolean) =>
                       handleInputChange("license", value)
                     }
                   >
@@ -1450,7 +1450,7 @@ export default function UploadPage() {
                     <Checkbox
                       id="isPublic"
                       checked={formData.isPublic}
-                      onCheckedChange={(checked) =>
+                      onCheckedChange={(checked: boolean) =>
                         handleInputChange("isPublic", checked as boolean)
                       }
                       className="border-slate-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
@@ -1463,7 +1463,7 @@ export default function UploadPage() {
                     <Checkbox
                       id="allowCommercial"
                       checked={formData.allowCommercial}
-                      onCheckedChange={(checked) =>
+                      onCheckedChange={(checked: boolean) =>
                         handleInputChange("allowCommercial", checked as boolean)
                       }
                       className="border-slate-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
