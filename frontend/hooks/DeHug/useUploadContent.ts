@@ -34,7 +34,7 @@ const useUploadContent = () => {
   const { ensureCorrectChain } = useChainSwitch();
   const { pushChainClient } = usePushChainClient();
 
-  // BaseScan URL helper
+  // Donut push.network URL helper
   const getExplorerUrl = (txHash: `0x${string}`) => {
     try {
       const url = (pushChainClient as any)?.explorer?.getTransactionUrl?.(txHash);
@@ -208,7 +208,7 @@ const useUploadContent = () => {
         console.warn("Could not fetch token ID automatically.");
         const explorerUrl = getExplorerUrl(txHash);
         toast.update(loadingToast, { 
-          render: `NFT minted! View on BaseScan: ${explorerUrl}`, 
+          render: `NFT minted! View on Donut push.network: ${explorerUrl}`, 
           type: "warning", 
           isLoading: false,
           autoClose: 10000
@@ -217,7 +217,7 @@ const useUploadContent = () => {
         return {
           success: true,
           transactionHash: txHash,
-          tokenId: "Check BaseScan",
+          tokenId: "Check Donut push.network",
           explorerUrl,
         };
       }
