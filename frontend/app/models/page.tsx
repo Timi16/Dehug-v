@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Filter, Eye, Calendar, User, Shield, Brain, Zap, Star, Coins, TrendingUp, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { DownloadStatsComponent } from "@/components/ui/download-stats"
-import { useActiveAccount } from "thirdweb/react"
+import { useAccount } from "@/lib/thirdweb-hooks"
 import useGetLatestModels from "@/hooks/useGetLatestModels"
 import ReactMarkdown from "react-markdown";
 
@@ -37,10 +37,10 @@ export default function ModelsPage() {
   const [selectedTask, setSelectedTask] = useState("All")
   const [sortBy, setSortBy] = useState("trending")
 
-  const account = useActiveAccount()
+  const { isConnected } = useAccount()
   const { models, isLoading, error, refetch } = useGetLatestModels(20, 100)
 
-  if (!account) {
+  if (!isConnected) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-slate-900 to-gray-950 text-white">
         <div className="flex items-center justify-center min-h-screen">

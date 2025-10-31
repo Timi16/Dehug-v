@@ -23,7 +23,7 @@ import {
 import Link from "next/link"
 import { DownloadStatsComponent } from "@/components/ui/download-stats"
 import useGetLatestDatasets from "@/hooks/useGetLatestDatasets"
-import { useActiveAccount } from "thirdweb/react"
+import { useAccount } from "@/lib/thirdweb-hooks"
 import ReactMarkdown from "react-markdown";
 
 const categories = ["All", "Natural Language Processing", "Computer Vision", "Audio", "Multimodal", "Tabular"]
@@ -33,11 +33,11 @@ export default function DatasetsPage() {
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [sortBy, setSortBy] = useState("trending")
 
-  const account = useActiveAccount()
+  const { isConnected } = useAccount()
   const { datasets, isLoading, error, refetch } = useGetLatestDatasets(20, 100)
 
   // Show wallet connection prompt if not connected
-  if (!account) {
+  if (!isConnected) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-slate-900 to-gray-950 text-white flex items-center justify-center">
         <div className="text-center space-y-6">
