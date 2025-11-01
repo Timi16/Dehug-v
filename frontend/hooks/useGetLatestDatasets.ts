@@ -43,19 +43,51 @@ const useGetLatestDatasets = (limit: number = 10, maxFetch: number = 50) => {
     setError(null);
 
     try {
+      console.log('🔍 Fetching datasets from contract:', process.env.DEHUG_ADDRESS);
+      
       const contract = getContract({
         client: thirdwebClient,
-        chain: pushChainDonut ,
+        chain: pushChainDonut,
         address: process.env.DEHUG_ADDRESS as string,
       });
 
-      // Fetch latest token IDs
-      const latestTokenIdsBigInt = await readContract({
-        contract,
-        method: "function getLatestContent(uint256 _count) view returns (uint256[] memory)",
-        params: [BigInt(maxFetch)],
-      });
+      // Fetch latest token IDs with better error handling
+      let latestTokenIdsBigInt;
+      try {
+        latestTokenIdsBigInt = await readContract({
+          contract,
+          method: "function getLatestContent(uint256 _count) view returns (uint256[] memory)",
+          params: [BigInt(maxFetch)],
+        });
+        
+        console.log('✅ Raw contract response:', latestTokenIdsBigInt);
+      } catch (contractError: any) {
+        console.error('❌ Contract call failed:', {
+          message: contractError.message,
+          code: contractError.code,
+          data: contractError.data,
+        });
+        
+        // Check if it's a zero data error (no content uploaded yet)
+        if (contractError.message?.includes('zero data') || contractError.message?.includes('0x')) {
+          console.log('ℹ️ No datasets found on blockchain yet');
+          setDatasets([]);
+          setError(null); // Clear error since this is expected for empty contract
+          return;
+        }
+        
+        throw contractError; // Re-throw if it's a different error
+      }
+
+      // Check if response is empty or null
+      if (!latestTokenIdsBigInt || latestTokenIdsBigInt.length === 0) {
+        console.log('ℹ️ Contract returned empty array - no datasets uploaded yet');
+        setDatasets([]);
+        return;
+      }
+
       const latestTokenIds = latestTokenIdsBigInt.map((id) => Number(id));
+      console.log('📊 Found token IDs:', latestTokenIds);
 
       // Fetch batch content data
       const batchResult = await readContract({
@@ -74,9 +106,12 @@ const useGetLatestDatasets = (limit: number = 10, maxFetch: number = 50) => {
       }
 
       if (datasetTokenIds.length === 0) {
+        console.log('ℹ️ No active datasets found (might be models only)');
         setDatasets([]);
         return;
       }
+
+      console.log('🎯 Filtered dataset token IDs:', datasetTokenIds);
 
       // Fetch full details for filtered datasets
       const datasetPromises = datasetTokenIds.map(async (tid) => {
@@ -127,11 +162,12 @@ const useGetLatestDatasets = (limit: number = 10, maxFetch: number = 50) => {
       });
 
       const fetchedDatasets = await Promise.all(datasetPromises);
+      console.log('✨ Successfully fetched datasets:', fetchedDatasets.length);
       setDatasets(fetchedDatasets);
-    } catch (err) {
-      console.error("Error fetching latest datasets:", err);
-      setError("Failed to fetch latest datasets");
-      toast.error("Error fetching latest datasets");
+    } catch (err: any) {
+      console.error("❌ Error fetching latest datasets:", err);
+      setError("Failed to fetch datasets from blockchain. The contract might be empty or on a different network.");
+      toast.error("Error fetching datasets");
     } finally {
       stopLoading();
     }
