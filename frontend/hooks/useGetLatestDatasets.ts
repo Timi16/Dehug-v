@@ -51,7 +51,8 @@ const useGetLatestDatasets = (limit: number = 10, maxFetch: number = 50) => {
         address: process.env.DEHUG_ADDRESS as string,
       });
 
-      // Fetch latest token IDs with better error handling
+      // STEP 1: Fetch latest token IDs
+      console.log('📋 Step 1: Fetching latest token IDs...');
       let latestTokenIdsBigInt;
       try {
         latestTokenIdsBigInt = await readContract({
@@ -60,26 +61,27 @@ const useGetLatestDatasets = (limit: number = 10, maxFetch: number = 50) => {
           params: [BigInt(maxFetch)],
         });
         
-        console.log('✅ Raw contract response:', latestTokenIdsBigInt);
+        console.log('✅ Step 1 Complete: Found token IDs:', latestTokenIdsBigInt);
       } catch (contractError: any) {
-        console.error('❌ Contract call failed:', {
+        console.error('❌ Step 1 Failed:', {
           message: contractError.message,
           code: contractError.code,
-          data: contractError.data,
         });
         
         // Check if it's a zero data error (no content uploaded yet)
-        if (contractError.message?.includes('zero data') || contractError.message?.includes('0x')) {
+        if (contractError.message?.includes('zero data') || 
+            contractError.message?.includes('0x') ||
+            contractError.message?.includes('empty')) {
           console.log('ℹ️ No datasets found on blockchain yet');
           setDatasets([]);
-          setError(null); // Clear error since this is expected for empty contract
+          setError(null);
           return;
         }
         
-        throw contractError; // Re-throw if it's a different error
+        throw contractError;
       }
 
-      // Check if response is empty or null
+      // Check if response is empty
       if (!latestTokenIdsBigInt || latestTokenIdsBigInt.length === 0) {
         console.log('ℹ️ Contract returned empty array - no datasets uploaded yet');
         setDatasets([]);
@@ -87,87 +89,134 @@ const useGetLatestDatasets = (limit: number = 10, maxFetch: number = 50) => {
       }
 
       const latestTokenIds = latestTokenIdsBigInt.map((id) => Number(id));
-      console.log('📊 Found token IDs:', latestTokenIds);
+      console.log(`📊 Processing ${latestTokenIds.length} token IDs`);
 
-      // Fetch batch content data
-      const batchResult = await readContract({
-        contract,
-        method: "function getContentBatch(uint256[] calldata _tokenIds) view returns (address[] memory uploaders, uint8[] memory contentTypes, string[] memory ipfsHashes, string[] memory titles, uint8[] memory qualityTiers, uint256[] memory downloadCounts, bool[] memory isActiveList)",
-        params: [latestTokenIds.map(BigInt)],
-      });
-
-      // Filter for datasets (contentType == 0)
+      // STEP 2: Filter for datasets by fetching content individually
+      console.log('🔍 Step 2: Filtering for datasets...');
       const datasetTokenIds: number[] = [];
-      for (let i = 0; i < batchResult[1].length; i++) {
-        if (batchResult[1][i] === 0 && batchResult[6][i]) { // contentType == 0 (DATASET) and isActive
-          datasetTokenIds.push(latestTokenIds[i]);
-          if (datasetTokenIds.length === limit) break;
+      
+      for (const tokenId of latestTokenIds) {
+        try {
+          const contentResult = await readContract({
+            contract,
+            method: "function getContent(uint256 _tokenId) view returns (address uploader, uint8 contentType, string memory ipfsHash, string memory title, uint8 qualityTier, uint256 downloadCount, uint256 totalPointsEarned, uint256 uploadTimestamp, bool isActive)",
+            params: [BigInt(tokenId)],
+          });
+          
+          // contentResult[1] = contentType (0 = DATASET, 1 = MODEL)
+          // contentResult[8] = isActive
+          const contentType = contentResult[1];
+          const isActive = contentResult[8];
+          
+          console.log(`  Token ${tokenId}: type=${contentType}, active=${isActive}`);
+          
+          // Only include active datasets (contentType === 0)
+          if (contentType === 0 && isActive) {
+            datasetTokenIds.push(tokenId);
+            console.log(`  ✅ Added dataset token ${tokenId}`);
+            
+            // Stop when we reach the limit
+            if (datasetTokenIds.length >= limit) {
+              console.log(`  🎯 Reached limit of ${limit} datasets`);
+              break;
+            }
+          }
+        } catch (err) {
+          console.log(`  ⚠️ Skipping token ${tokenId}:`, err);
+          continue;
         }
       }
 
+      console.log(`✅ Step 2 Complete: Found ${datasetTokenIds.length} datasets`);
+
       if (datasetTokenIds.length === 0) {
-        console.log('ℹ️ No active datasets found (might be models only)');
+        console.log('ℹ️ No active datasets found (might be models only or all inactive)');
         setDatasets([]);
         return;
       }
 
-      console.log('🎯 Filtered dataset token IDs:', datasetTokenIds);
-
-      // Fetch full details for filtered datasets
-      const datasetPromises = datasetTokenIds.map(async (tid) => {
-        const contentResult = await readContract({
-          contract,
-          method: "function getContent(uint256 _tokenId) view returns (address uploader, uint8 contentType, string memory ipfsHash, string memory title, uint8 qualityTier, uint256 downloadCount, uint256 totalPointsEarned, uint256 uploadTimestamp, bool isActive)",
-          params: [BigInt(tid)],
-        });
-
-        const uri = await readContract({
-          contract,
-          method: "function uri(uint256) view returns (string memory)",
-          params: [BigInt(tid)],
-        });
-
-        let metadata: any = {};
+      // STEP 3: Fetch full details for filtered datasets
+      console.log('📦 Step 3: Fetching full dataset details...');
+      const datasetPromises = datasetTokenIds.map(async (tid, index) => {
         try {
-          const metadataUrl = uri.replace("ipfs://", IPFS_GATEWAY);
-          const response = await fetch(metadataUrl);
-          if (response.ok) {
-            metadata = await response.json();
+          console.log(`  Fetching details for dataset ${index + 1}/${datasetTokenIds.length} (Token ID: ${tid})`);
+          
+          // Fetch content details
+          const contentResult = await readContract({
+            contract,
+            method: "function getContent(uint256 _tokenId) view returns (address uploader, uint8 contentType, string memory ipfsHash, string memory title, uint8 qualityTier, uint256 downloadCount, uint256 totalPointsEarned, uint256 uploadTimestamp, bool isActive)",
+            params: [BigInt(tid)],
+          });
+
+          // Fetch metadata URI
+          const uri = await readContract({
+            contract,
+            method: "function uri(uint256) view returns (string memory)",
+            params: [BigInt(tid)],
+          });
+
+          // Fetch metadata from IPFS
+          let metadata: any = {};
+          try {
+            const metadataUrl = uri.replace("ipfs://", IPFS_GATEWAY);
+            console.log(`    Fetching metadata from: ${metadataUrl}`);
+            const response = await fetch(metadataUrl);
+            if (response.ok) {
+              metadata = await response.json();
+              console.log(`    ✅ Metadata loaded for token ${tid}`);
+            } else {
+              console.log(`    ⚠️ Metadata fetch failed (${response.status})`);
+            }
+          } catch (fetchErr) {
+            console.error(`    ❌ Failed to fetch metadata for token ${tid}:`, fetchErr);
           }
-        } catch (fetchErr) {
-          console.error(`Failed to fetch metadata for token ${tid}:`, fetchErr);
+
+          const properties = metadata.properties || {};
+
+          const dataset = {
+            id: tid.toString(),
+            title: contentResult[3],
+            description: metadata.description || "No description available",
+            category: properties.category || "Data Processing",
+            task: properties.task || "Dataset",
+            author: `${contentResult[0].slice(0, 6)}...${contentResult[0].slice(-4)}`,
+            uploadDate: new Date(Number(contentResult[7]) * 1000).toISOString().split('T')[0],
+            downloads: Number(contentResult[5]),
+            size: properties.size || "Unknown",
+            format: properties.format || "CSV",
+            tags: properties.tags || [],
+            likes: Math.floor(Number(contentResult[6]) / 10),
+            verified: Number(contentResult[4]) >= 2, // SILVER tier or higher
+            license: properties.license || "MIT",
+            framework: properties.framework || "",
+            nftValue: `${(Number(contentResult[6]) / 1000).toFixed(1)} ETH`,
+            trending: Number(contentResult[5]) > 1000,
+          } as DatasetData;
+
+          console.log(`    ✅ Dataset ${index + 1} complete:`, dataset.title);
+          return dataset;
+        } catch (err) {
+          console.error(`    ❌ Error processing token ${tid}:`, err);
+          throw err; // Re-throw to be caught by Promise.all
         }
-
-        const properties = metadata.properties || {};
-
-        return {
-          id: tid.toString(),
-          title: contentResult[3],
-          description: metadata.description || "No description available",
-          category: properties.category || "Data Processing",
-          task: properties.task || "Dataset",
-          author: `${contentResult[0].slice(0, 6)}...${contentResult[0].slice(-4)}`,
-          uploadDate: new Date(Number(contentResult[7]) * 1000).toISOString().split('T')[0],
-          downloads: Number(contentResult[5]),
-          size: properties.size || "Unknown",
-          format: properties.format || "CSV",
-          tags: properties.tags || [],
-          likes: Math.floor(Number(contentResult[6]) / 10),
-          verified: Number(contentResult[4]) === 2,
-          license: properties.license || "MIT",
-          framework: properties.framework || "",
-          nftValue: `${(Number(contentResult[6]) / 1000).toFixed(1)} ETH`,
-          trending: Number(contentResult[5]) > 1000,
-        } as DatasetData;
       });
 
       const fetchedDatasets = await Promise.all(datasetPromises);
-      console.log('✨ Successfully fetched datasets:', fetchedDatasets.length);
+      console.log(`✅ Step 3 Complete: Successfully fetched ${fetchedDatasets.length} datasets`);
+      console.log('🎉 All steps complete!');
+      
       setDatasets(fetchedDatasets);
+      toast.success(`Loaded ${fetchedDatasets.length} datasets`);
+      
     } catch (err: any) {
-      console.error("❌ Error fetching latest datasets:", err);
-      setError("Failed to fetch datasets from blockchain. The contract might be empty or on a different network.");
-      toast.error("Error fetching datasets");
+      console.error("❌ Fatal error in fetchLatestDatasets:", {
+        message: err.message,
+        code: err.code,
+        stack: err.stack,
+      });
+      
+      setError("Failed to fetch datasets from blockchain. Please check console for details.");
+      toast.error("Error loading datasets");
     } finally {
       stopLoading();
     }
@@ -175,7 +224,10 @@ const useGetLatestDatasets = (limit: number = 10, maxFetch: number = 50) => {
 
   useEffect(() => {
     if (isConnected) {
+      console.log('🚀 Wallet connected, fetching datasets...');
       fetchLatestDatasets();
+    } else {
+      console.log('⏸️ Wallet not connected');
     }
   }, [isConnected, fetchLatestDatasets]);
 
